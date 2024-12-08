@@ -1,0 +1,130 @@
+#include <Arduino.h>
+#include <HalfStepper/HalfStepper.h>
+#include <SerialPIO.h>
+
+SerialPIO serialBufferIn(1, 2, 64*1024); // 64KiB... yeah it's alot but that's more than enough to store any communication from the other controller, since i just wanna process it all at once
+
+// Define a stepper and the pins it will use
+// Stepper stepper(24, PIN_B5, PIN_B3, PIN_B6, PIN_B4); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
+
+#define ENDSTOP_DETECT 17
+
+#define HEAD_STEPPER_PIN_1 28
+#define HEAD_STEPPER_PIN_2 26
+#define HEAD_STEPPER_PIN_3 27
+#define HEAD_STEPPER_PIN_4 22
+
+#define PAPER_STEPPER_PIN_1 21
+#define PAPER_STEPPER_PIN_2 19
+#define PAPER_STEPPER_PIN_3 20
+#define PAPER_STEPPER_PIN_4 18
+
+HalfStepper headStepper(20, HEAD_STEPPER_PIN_1, HEAD_STEPPER_PIN_2, HEAD_STEPPER_PIN_3, HEAD_STEPPER_PIN_4);
+HalfStepper paperStepper(20, PAPER_STEPPER_PIN_1, PAPER_STEPPER_PIN_2, PAPER_STEPPER_PIN_3, PAPER_STEPPER_PIN_4);
+
+#define HEAD_STEPPER_END_OFFSET -9
+#define HEAD_STEPPER_MARGIN 30
+#define HEAD_STEPPER_MAX 736
+
+#define MIN_PAPER_BURN_MICROS 1000
+#define MAX_PAPER_BURN_MICROS 3500
+#define BURNER_PIN_1 15 // bottom
+#define BURNER_PIN_2 14
+#define BURNER_PIN_3 13
+#define BURNER_PIN_4 12
+#define BURNER_PIN_5 11
+#define BURNER_PIN_6 10
+#define BURNER_PIN_7 9
+#define BURNER_PIN_8 8
+#define BURNER_PIN_9 7 // top
+
+byte imageBuffer[128*112*2/8];
+
+long long int headStepCounter = 0;
+
+void headStepperMoveRel(int steps) {
+    headStepper.step(steps);
+    headStepCounter += steps;
+}
+inline void headStepperMoveTo(int steps) {
+    headStepperMoveRel(steps-headStepCounter);
+}
+
+void runBurner(uint32_t pin, uint16_t micros) {
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(micros);
+    digitalWrite(pin, LOW);
+}
+
+void runAllBurners(uint16_t micros) {
+    digitalWrite(BURNER_PIN_1, HIGH);
+    digitalWrite(BURNER_PIN_2, HIGH);
+    digitalWrite(BURNER_PIN_3, HIGH);
+    digitalWrite(BURNER_PIN_4, HIGH);
+    digitalWrite(BURNER_PIN_5, HIGH);
+    digitalWrite(BURNER_PIN_6, HIGH);
+    digitalWrite(BURNER_PIN_7, HIGH);
+    digitalWrite(BURNER_PIN_8, HIGH);
+    digitalWrite(BURNER_PIN_9, HIGH);
+    delayMicroseconds(micros);
+    digitalWrite(BURNER_PIN_1, LOW);
+    digitalWrite(BURNER_PIN_2, LOW);
+    digitalWrite(BURNER_PIN_3, LOW);
+    digitalWrite(BURNER_PIN_4, LOW);
+    digitalWrite(BURNER_PIN_5, LOW);
+    digitalWrite(BURNER_PIN_6, LOW);
+    digitalWrite(BURNER_PIN_7, LOW);
+    digitalWrite(BURNER_PIN_8, LOW);
+    digitalWrite(BURNER_PIN_9, LOW);
+}
+
+void setup() {
+    // Init endstop
+    pinMode(ENDSTOP_DETECT, INPUT_PULLUP);
+
+    // Init head stepper
+    headStepper.setSpeed(500);                      // This stepper can move quick so we'll make it move quick
+    if (digitalRead(ENDSTOP_DETECT) == HIGH) {      // If near endstop
+        headStepperMoveRel(25);                       // then move right so we can accurately home the head
+    }
+    while (digitalRead(ENDSTOP_DETECT) == LOW) {    // Until we hit the endstop
+        headStepperMoveRel(-1);                       // Move towards endstop
+        delayMicroseconds(100);                     // 0.1ms delay to ensure we don't over/undershoot
+    }
+    headStepperMoveRel(HEAD_STEPPER_END_OFFSET);      // Move so we're actually at the end
+    headStepper.SetPosition(0);                     // Set this as the home position
+    headStepCounter = 0;
+
+    // Init paper stepper
+    paperStepper.setSpeed(400);
+
+    // Burner Pins
+    pinMode(BURNER_PIN_1, OUTPUT);
+    pinMode(BURNER_PIN_2, OUTPUT);
+    pinMode(BURNER_PIN_3, OUTPUT);
+    pinMode(BURNER_PIN_4, OUTPUT);
+    pinMode(BURNER_PIN_5, OUTPUT);
+    pinMode(BURNER_PIN_6, OUTPUT);
+    pinMode(BURNER_PIN_7, OUTPUT);
+    pinMode(BURNER_PIN_8, OUTPUT);
+    pinMode(BURNER_PIN_9, OUTPUT);
+
+    for (int k=0; k<4; k++) {
+        headStepperMoveTo(HEAD_STEPPER_MAX);
+        headStepperMoveRel(-2);
+
+        for (float i = 0; i < 4; i+=1) {
+            for (int j=0; j < 18; j++) {
+                runAllBurners(250+i*625);
+                headStepperMoveRel(-1);
+            }
+        }
+
+        paperStepper.step(-67);
+    }
+
+    paperStepper.step(-80);
+}
+
+void loop(){
+}
