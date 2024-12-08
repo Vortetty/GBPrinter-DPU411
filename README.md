@@ -2,7 +2,9 @@
 
 Uses a clone of the Gameboy Printer emulator to act as a printer, while managing a thermal printer to print at a larger size.
 
-This version is made for the DPU411 printer, schematics are in the DRIVER folder and require kicad, the pcb is not guaranteed to work as i have not been able to try it.
+This version is made for the DPU411 Type 2 printer, schematics are in the DRIVER folder and require kicad, the pcb is not guaranteed to work as i have not been able to try it.
+
+The code here shold be adaptable to virtually every thermal printer you find, maybe even some non-thermal if you write enough code. All you need to change is the head control and init code to match your printer, the decoding can be the same in 99% of cases.
 
 ## How to set up
 
